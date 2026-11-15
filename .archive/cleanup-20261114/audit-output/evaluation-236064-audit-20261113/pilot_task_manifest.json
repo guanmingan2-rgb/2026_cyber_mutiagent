@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "not_frozen",
+  "requested_count": 12,
+  "task_ids": [],
+  "selection_executed": false,
+  "metadata_only_design": {
+    "classification": {
+      "VALID": "版本、唯一 ID、输入完整性、构建资源和评分配置均有肯定的运行前证据",
+      "INVALID": "可复核的输入损坏或缺失、重复 ID、已知污染或平台/评分配置不兼容",
+      "UNKNOWN": "必要的元数据、依赖可用性、污染或评分证据不足"
+    },
+    "exclusions_must_retain_reason_and_evidence": true,
+    "outcome_blind": true,
+    "proposed_seed": 20261113,
+    "seed_status": "proposed",
+    "proposed_method": "以已验证元数据确定项目、类别和复杂度分层；各层按固定 ID 顺序使用预注册随机种子抽样；同时冻结任务池哈希、分层规则和筛查记录",
+    "dedicated_baseline_role": "基线题用于回归检查，是否进入独立样本须在抽样前明确"
+  }
+}

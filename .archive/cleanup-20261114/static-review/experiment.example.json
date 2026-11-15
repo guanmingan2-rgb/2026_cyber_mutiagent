@@ -1,0 +1,22 @@
+{
+  "tasks": [
+    "teaching:1",
+    "teaching:2"
+  ],
+  "variants": [
+    "single",
+    "manager_worker",
+    "manager_worker_critic",
+    "full"
+  ],
+  "model": "deepseek-flash",
+  "budget": {
+    "wall_seconds": 120,
+    "max_requests": 12,
+    "max_generated_tokens": 8192
+  },
+  "evaluator": {
+    "mode": "local",
+    "timeout_seconds": 5
+  }
+}

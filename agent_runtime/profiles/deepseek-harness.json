@@ -1,0 +1,19 @@
+{
+  "shared_profile": "/home/ybgao/2026_cyber_agents/agent_runtime/profiles/deepseek-v41-flash.json",
+  "harness": "deepseek",
+  "runtime": {
+    "python": "3.12",
+    "distributions": {
+      "annotated-types": "0.8.0",
+      "deepseek-harness-runtime-bin": "0.2.1rc2",
+      "deepseek-harness-sdk": "0.2.1rc2",
+      "pydantic": "2.14.2",
+      "pydantic-core": "2.50.2",
+      "typing-inspection": "0.4.4",
+      "typing-extensions": "4.16.0"
+    },
+    "tools": [],
+    "native_tool_calling": true,
+    "profile": "sdk-minimal"
+  }
+}

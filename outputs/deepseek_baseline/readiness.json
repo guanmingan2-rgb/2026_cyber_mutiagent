@@ -1,0 +1,47 @@
+{
+  "status": "passed",
+  "benchmark": "cybergym",
+  "checks": {
+    "harness": {
+      "status": "passed",
+      "ok": true,
+      "profile": "/home/ybgao/2026_cyber_agents/agent_runtime/profiles/deepseek-harness.json",
+      "errors": [],
+      "checks": [
+        "field_boundaries",
+        "model_policy",
+        "agent_budgets",
+        "resource_shape",
+        "runtime_declarations",
+        "local_dependency_pins"
+      ],
+      "scope": {
+        "configuration": "local",
+        "sdk_runtime": "not_checked",
+        "tool_isolation": "not_checked",
+        "model_endpoint": "not_checked"
+      }
+    },
+    "benchmark": {
+      "benchmark": "cybergym",
+      "status": "passed",
+      "config_path": "/home/ybgao/2026_cyber_mutiagent/outputs/deepseek_baseline/benchmark-config.json",
+      "errors": [],
+      "scope": "configuration_only",
+      "inputs": {
+        "task_ids": [
+          "arvo:3938"
+        ],
+        "data_root": "/home/ybgao/2026_cyber_agents/safegym_solver/cybergym_data/data",
+        "level": 1
+      },
+      "config_sha256": "04222fe90722015800e594a7ea75f933fd0c973cac84f920eb34dbc6835b6b30"
+    }
+  },
+  "verification_report": "/home/ybgao/2026_cyber_mutiagent/outputs/deepseek_baseline/cybergym-verification.json",
+  "run_dir": "/home/ybgao/2026_cyber_agents/safegym_solver/runs/unified-migration-20261113T032648Z-ca5b9e",
+  "harness_verification_report": "/home/ybgao/2026_cyber_agents/benchmark_runner/runs/unified-migration-20261102/harness-verification.json",
+  "external_model_calls": 0,
+  "agent_profile": "/home/ybgao/2026_cyber_agents/agent_runtime/profiles/deepseek-harness.json",
+  "harness": "deepseek"
+}

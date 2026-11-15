@@ -1,0 +1,230 @@
+"""Offline checks for the CyberGym static-review entry with the real SDK."""
+
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
+import json
+import os
+from pathlib import Path
+import sys
+import tarfile
+from tempfile import TemporaryDirectory
+import threading
+
+from review_task import review_task
+from task_materials import load_task, official_record
+
+
+TASK = 'arvo:1'
+SOURCE = 'src/mean.py'
+OTHER = 'src/other.py'
+CODE = b'def mean(values):\n    return sum(values) / len(values)\n'
+ASSIGNMENT = {'objective': 'Review empty-sequence behavior.', 'allowed_files': [SOURCE],
+              'checks': ['Check the denominator.'], 'evidence': [{'file': SOURCE, 'line': 2}]}
+WORKER = {'summary': 'Review of sequence handling.', 'findings': [
+    {'file': SOURCE, 'line': 2, 'severity': 'medium',
+     'message': 'An empty sequence has zero length.', 'suggestion': 'Define empty-input behavior.'},
+    {'file': SOURCE, 'line': 1, 'severity': 'low',
+     'message': 'The function name is unclear.', 'suggestion': 'Choose a more specific name.'},
+]}
+VERIFIER = {'reviews': [{'id': 'F1', 'verdict': 'pass', 'reason': 'The length is the divisor.'},
+                        {'id': 'F2', 'verdict': 'reject', 'reason': 'The name is clear.'}]}
+
+
+def archive(path, entries):
+    with tarfile.open(path, 'w:gz') as stream:
+        for name, data in entries:
+            item = tarfile.TarInfo(name)
+            if isinstance(data, bytes):
+                item.size = len(data)
+                stream.addfile(item, io.BytesIO(data))
+            else:
+                item.type, item.linkname = tarfile.SYMTYPE, data
+                stream.addfile(item)
+
+
+def rejected(operation, expected):
+    try:
+        operation()
+    except (ValueError, OSError) as exc:
+        assert expected in str(exc), str(exc)
+    else:
+        raise AssertionError(f'expected rejection: {expected}')
+
+
+def inputs(root):
+    data = root / 'data'
+    task = data / 'arvo/1'
+    task.mkdir(parents=True)
+    (task / 'description.txt').write_text('Review a mean calculation.')
+    readme = root / 'README.md'
+    readme.write_text('Inspect the arithmetic helper.')
+    packed = task / 'repo-vul.tar.gz'
+    for entries, selected, expected in [
+        ([('../escape', CODE)], [SOURCE], 'unsafe archive path'),
+        ([(SOURCE, 'other.py')], [SOURCE], 'not a regular file'),
+        ([(SOURCE, CODE), ('./' + SOURCE, CODE)], [SOURCE], 'duplicate archive member'),
+        ([(OTHER, CODE)], [SOURCE], 'missing source members'),
+        ([(SOURCE, b'\xff')], [SOURCE], 'expected UTF-8'),
+        ([(SOURCE, b'a' * (40 * 1024)), (OTHER, b'b' * (30 * 1024))],
+         [SOURCE, OTHER], '64 KiB total'),
+        ([(SOURCE, CODE)], ['../escape'], 'unsafe archive path'),
+    ]:
+        archive(packed, entries)
+        rejected(lambda: load_task(TASK, data, readme, selected), expected)
+    archive(packed, [('./' + SOURCE, CODE), (OTHER, b'VALUE = 1\n')])
+    loaded = load_task(TASK, data, readme, [SOURCE, OTHER])
+    assert loaded['sources'][SOURCE]['text'] == CODE.decode()
+    assert loaded['description']['text'] and loaded['readme']['text']
+    readme_link = root / 'README-link.md'
+    readme_link.symlink_to(readme)
+    rejected(lambda: load_task(TASK, data, readme_link, [SOURCE]), 'Too many levels')
+    large_readme = root / 'large.md'
+    large_readme.write_text('a' * (16 * 1024 + 1))
+    rejected(lambda: load_task(TASK, data, large_readme, [SOURCE]), 'size limit')
+    score = root / 'score.json'
+    score.write_text(json.dumps({'task_id': TASK,
+                                 'selected_at_1': {'status': 'completed', 'success': True}}))
+    rejected(lambda: official_record(score, 'arvo:2'), 'does not match')
+    print('PASS: material loading, limits, archive validation and task-bound score import')
+    return data, readme, score
+
+
+@contextmanager
+def model(script):
+    calls, errors = [], []
+    release = threading.Event()
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_):
+            pass
+
+        def do_POST(self):
+            try:
+                body = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                assert self.path == '/v1/chat/completions' and not body.get('tools')
+                prompts = [m['content'] for m in body['messages']
+                           if m['role'] == 'user' and m['content'].startswith('Role: ')]
+                assert len(prompts) == 1
+                header, raw = prompts[0].split('Input JSON:\n', 1)
+                role = header.removeprefix('Role: ').split('.', 1)[0]
+                expected, answer = script[len(calls)]
+                assert role == expected, (role, expected)
+                payload = json.loads(raw)
+                if role in ('worker', 'verifier'):
+                    assert payload['sources'] == {SOURCE: CODE.decode()}
+                    assert payload['assignment'] == ASSIGNMENT
+                elif role == 'manager_select':
+                    assert [finding['id'] for finding in payload['eligible_findings']] == ['F1']
+                    assert payload['verifier_report'] == VERIFIER
+                elif role == 'manager_revise':
+                    assert payload['critic_feedback']['verdict'] == 'revise'
+                calls.append(role)
+                if answer is None:
+                    release.wait(40)
+                    return
+                response = {'role': 'assistant', 'content': json.dumps(answer),
+                            'reasoning_content': 'fixture'}
+                common = {'id': 'fixture-' + role, 'created': 1, 'model': body['model']}
+                usage = {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}
+                if body.get('stream'):
+                    chunks = [
+                        {**common, 'object': 'chat.completion.chunk', 'choices': [
+                            {'index': 0, 'delta': response, 'finish_reason': None}]},
+                        {**common, 'object': 'chat.completion.chunk', 'choices': [
+                            {'index': 0, 'delta': {}, 'finish_reason': 'stop'}], 'usage': usage},
+                    ]
+                    data = (''.join('data: ' + json.dumps(item) + '\n\n' for item in chunks)
+                            + 'data: [DONE]\n\n').encode()
+                    mime = 'text/event-stream'
+                else:
+                    data = json.dumps({**common, 'object': 'chat.completion', 'choices': [
+                        {'index': 0, 'message': response, 'finish_reason': 'stop'}], 'usage': usage}).encode()
+                    mime = 'application/json'
+                self.send_response(200)
+                self.send_header('Content-Type', mime)
+                self.send_header('Content-Length', str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+            except Exception as exc:
+                errors.append(repr(exc))
+                self.send_error(500)
+
+    server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_port}/v1', calls, errors
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def verify_role_cleanup(output, roles):
+    workspaces = set()
+    for role in roles:
+        run = output / role
+        spec = json.loads((run / 'execution/spec.json').read_text())
+        workspaces.add(spec['workspace'])
+        assert not list((run / 'workspace').iterdir())
+        execution = json.loads((run / 'execution/execution.json').read_text())
+        try:
+            os.killpg(execution['process_group'], 0)
+        except ProcessLookupError:
+            pass
+        else:
+            raise AssertionError(f'{role} process group remains alive')
+    assert len(workspaces) == len(roles)
+
+
+def main():
+    with TemporaryDirectory(prefix='dsh-task-review-') as temp:
+        root = Path(temp)
+        data, readme, score = inputs(root)
+        start = [('manager', ASSIGNMENT)]
+        tail = [('worker', WORKER), ('verifier', VERIFIER), ('manager_select', {'selected_ids': ['F1']})]
+        mapped = [('mapper', {'locations': [{'file': SOURCE, 'line': 2, 'note': 'Mean formula.'}]})]
+        critic = [('critic', {'verdict': 'revise', 'reason': 'Confirm assignment evidence.'}),
+                  ('manager_revise', ASSIGNMENT),
+                  ('critic_recheck', {'verdict': 'pass', 'reason': 'The assignment cites the divisor.'})]
+        for name, sequence, flags, exit_code, status in [
+            ('default', start + tail, {}, 0, 'completed'),
+            ('reviewed', mapped + start + critic + tail, {'mapper': True, 'critic': True}, 0, 'completed'),
+            ('invalid_selection', start + tail[:2] + [('manager_select', {'selected_ids': ['F2']})],
+             {}, 1, 'failed'),
+            ('timeout', [('manager', None)], {'role_timeout': 10}, 124, 'timeout'),
+        ]:
+            output = root / name
+            with model(sequence) as (url, calls, errors):
+                result = review_task(TASK, data, readme, [SOURCE, OTHER], output, sys.executable,
+                                     fixture_url=url, official_result=score, **flags)
+                assert result == exit_code and not errors, (result, errors)
+                assert calls == [role for role, _ in sequence], calls
+            verify_role_cleanup(output, calls)
+            events = [json.loads(line) for line in (output / 'events.jsonl').read_text().splitlines()]
+            lifecycle = [event for event in events if event['status'] != 'structured_output']
+            assert lifecycle[-1]['status'] == status, events
+            parse_event = next(event for event in reversed(events)
+                               if event['status'] == 'structured_output')
+            assert parse_event['role'] == calls[-1]
+            assert parse_event['parse_status'] == {
+                'completed': 'valid', 'failed': 'invalid', 'timeout': 'not_attempted',
+            }[status], parse_event
+            assert parse_event['handoff_saved'] == (status == 'completed'), parse_event
+            assert (output / 'external_official_result.json').is_file()
+            if result == 0:
+                report = json.loads((output / 'report.json').read_text())
+                assert [item['id'] for item in report['findings']] == ['F1']
+                assert report['findings'][0]['verification']['verdict'] == 'pass'
+                assert 'official_result' not in report
+            else:
+                assert not (output / 'report.json').exists()
+            if name == 'timeout':
+                assert not (output / 'worker').exists()
+            print(f'PASS: {name}')
+
+
+if __name__ == '__main__':
+    main()

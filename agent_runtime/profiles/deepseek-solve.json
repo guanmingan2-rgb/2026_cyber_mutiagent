@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "harness": "deepseek",
+  "provider": "DeepSeek",
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key_env": "DEEPSEEK_API_KEY",
+  "model": {
+    "served_name": "deepseek-flash",
+    "provider_route": "deepseek/deepseek-flash",
+    "requested_checkpoint": "DeepSeek-V4.1-Flash-1017",
+    "revision_evidence": {
+      "source": "https://api-docs.deepseek.com/quick_start/pricing",
+      "kind": "官方模型文档声明，未独立验证权重哈希"
+    },
+    "context_tokens": 1000000
+  },
+  "policy": {
+    "protocol": "openai_chat",
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "thinking": {
+      "type": "disabled"
+    },
+    "reasoning_effort": "low",
+    "max_output_tokens": 32768,
+    "max_total_generated_tokens": 512000
+  },
+  "cost_reporting": {
+    "cache_creation_not_applicable": true,
+    "cache_creation_evidence": "2026-10-29 核对 DeepSeek 官方自动缓存说明 https://api-docs.deepseek.com/guides/kv_cache/ 、用量定义 https://api-docs.deepseek.com/api/create-chat-completion/ 、当前计费表 https://api-docs.deepseek.com/quick_start/pricing/ 及无额外缓存费用说明 https://api-docs.deepseek.com/news/news0802/ 。Chat 输入按缓存命中/未命中完整计量，没有独立缓存写入计量项；按 CyberGym 不适用口径记 0，不表示服务端没有物理写入。"
+  },
+  "budgets": {
+    "max_steps": 1000,
+    "wall_seconds": 14400,
+    "request_timeout_seconds": 1800
+  },
+  "resources": {
+    "cpus": 4,
+    "memory_gib": 24,
+    "time": "05:00:00",
+    "gpu_count": 0
+  },
+  "runtime": {
+    "python": "3.12",
+    "distributions": {
+      "annotated-types": "0.8.0",
+      "deepseek-harness-runtime-bin": "0.2.1rc2",
+      "deepseek-harness-sdk": "0.2.1rc2",
+      "pydantic": "2.14.2",
+      "pydantic-core": "2.50.2",
+      "typing-inspection": "0.4.4",
+      "typing-extensions": "4.16.0"
+    },
+    "tools": [],
+    "native_tool_calling": true,
+    "profile": "sdk-minimal"
+  }
+}

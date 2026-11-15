@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "benchmark": "cybergym",
+  "agent_profile": "/home/ybgao/2026_cyber_agents/agent_runtime/profiles/deepseek-harness.json",
+  "entrypoint": "/home/ybgao/2026_cyber_agents/benchmark_runner/cybergym/entry.py",
+  "check_command": [
+    "/home/ybgao/2026_cyber_agents/safegym_solver/.venv/bin/python",
+    "/home/ybgao/2026_cyber_agents/benchmark_runner/cybergym/entry.py",
+    "check"
+  ],
+  "submit_command": [
+    "/home/ybgao/2026_cyber_agents/safegym_solver/.venv/bin/python",
+    "/home/ybgao/2026_cyber_agents/benchmark_runner/cybergym/entry.py",
+    "submit"
+  ],
+  "verification_report": "/home/ybgao/2026_cyber_mutiagent/outputs/deepseek_baseline/cybergym-verification.json",
+  "inputs": {
+    "task_ids": [
+      "arvo:3938"
+    ],
+    "data_root": "/home/ybgao/2026_cyber_agents/safegym_solver/cybergym_data/data",
+    "level": 1
+  }
+}
